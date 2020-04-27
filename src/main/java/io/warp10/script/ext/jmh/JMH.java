@@ -103,10 +103,13 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
       // Override parameters with those given
       overrideParameters(optionsBuilder, jvmArgsAppend, parameters);
 
-      // Copy warpscript extensions properties
+      // Copy warpscript extensions properties and warpfleet config
       Properties props = WarpConfig.getProperties();
       for (String key: props.stringPropertyNames()) {
-        if (key.equals(Configuration.CONFIG_WARPSCRIPT_EXTENSIONS) || key.startsWith(Configuration.CONFIG_WARPSCRIPT_EXTENSION_PREFIX)) {
+        if (key.equals(Configuration.CONFIG_WARPSCRIPT_EXTENSIONS)
+            || key.startsWith(Configuration.CONFIG_WARPSCRIPT_EXTENSION_PREFIX)
+            || key.equals(Configuration.WARPFLEET_MACROS_REPOS)
+            || key.equals(Configuration.WARPFLEET_MACROS_VALIDATOR)) {
           jvmArgsAppend.add("-D" + key + "=" + props.getProperty(key));
         }
       }
