@@ -18,12 +18,14 @@ package io.warp10.script.ext.jmh;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.warp10.WarpConfig;
-import io.warp10.continuum.Configuration;
+import io.warp10.WarpURLEncoder;
 import io.warp10.json.JsonUtils;
 import io.warp10.script.NamedWarpScriptFunction;
 import io.warp10.script.WarpScriptException;
+import io.warp10.script.WarpScriptLib;
 import io.warp10.script.WarpScriptStack;
 import io.warp10.script.WarpScriptStackFunction;
+import io.warp10.script.functions.SNAPSHOT;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.results.RunResult;
 import org.openjdk.jmh.results.format.ResultFormatFactory;
@@ -46,6 +48,7 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -53,7 +56,17 @@ import java.util.concurrent.TimeUnit;
 
 public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunction {
 
-  public static final String JVM_ARG_PREFIX = "-Djmh.macrosnapshot.file=";
+  public static final String JVM_ARG_PREFIX_BENCHCONF = "-Djmh.benchconfiguration.file=";
+  public static final String JVM_ARG_PREFIX_WARPCONF = "-Djmh.warp10configuration.file=";
+  public static final String MACRO_KEY = "macro";
+
+  // Setup and teardown calls, see http://tutorials.jenkov.com/java-performance/jmh.html#state-setup-and-teardown
+  public static final String PRETRIAL_MACRO = "pretrial";
+  public static final String PREITERATION_MACRO = "preiteration";
+  public static final String PREINVOCATION_MACRO = "preinvocation";
+  public static final String POSTINVOCATION_MACRO = "postinvocation";
+  public static final String POSTITERATION_MACRO = "postiteration";
+  public static final String POSTTRIAL_MACRO = "posttrial";
 
   public JMH(String name) {
     super(name);
@@ -68,28 +81,57 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
       throw new WarpScriptException(getName() + "expects a Map of JHM parameters.");
     }
 
-    Map<Object, Object> parameters = (Map) top;
+    Map<Object, Object> jmhConf = (Map) top;
 
-    // Get Macro to benchmark
+    // Get Macro to benchmark or Map of macros
     top = stack.pop();
 
-    if (!(top instanceof WarpScriptStack.Macro)) {
-      throw new WarpScriptException(getName() + "expects a Macro.");
+    Map<Object, Object> benchConfiguration;
+
+    if (top instanceof WarpScriptStack.Macro) {
+      benchConfiguration = new HashMap<Object, Object>();
+      benchConfiguration.put(MACRO_KEY, top);
+    } else if (top instanceof Map) {
+      benchConfiguration = (Map) top;
+      if (!benchConfiguration.containsKey(MACRO_KEY)) {
+        throw new WarpScriptException(getName() + "expects the map of macros to contain at least a '" + MACRO_KEY + "' key.");
+      }
+    } else {
+      throw new WarpScriptException(getName() + "expects a Macro or a map of macros.");
     }
 
-    String macroSnapshot = ((WarpScriptStack.Macro) top).snapshot();
-    File temp = null;
+    // Default to clear the stack after each invocation of the macro
+    if (!benchConfiguration.containsKey(POSTINVOCATION_MACRO)) {
+      WarpScriptStack.Macro clearMacro = new WarpScriptStack.Macro();
+      clearMacro.add(WarpScriptLib.getFunction(WarpScriptLib.CLEAR));
+      benchConfiguration.put(POSTINVOCATION_MACRO, clearMacro);
+    }
+
+    File benchConfFile = null;
+    File warpConfFile = null;
 
     try {
       // Write the snapshot to a temporary file. We must use a temp file because passing the snapshot as a JVM arg
       // may fail if it's too long.
-      temp = File.createTempFile("macrosnapshot", ".mc2");
-      try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(temp), StandardCharsets.UTF_8)) {
-        writer.write(macroSnapshot);
+      benchConfFile = File.createTempFile("benchConf", ".mc2");
+      try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(benchConfFile), StandardCharsets.UTF_8)) {
+        StringBuilder sb = new StringBuilder();
+        SNAPSHOT.addElement(sb, benchConfiguration);
+        writer.write(sb.toString());
+      }
+
+      // Recreate conf file to pass it to forks
+      warpConfFile = File.createTempFile("warpConf", ".conf");
+      try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(warpConfFile), StandardCharsets.UTF_8)) {
+        Properties props = WarpConfig.getProperties();
+        for (Map.Entry<Object, Object> entry: props.entrySet()) {
+          writer.write((String) entry.getKey() + " = " + WarpURLEncoder.encode((String) entry.getValue(), StandardCharsets.UTF_8) + "\n");
+        }
       }
 
       ArrayList<String> jvmArgsAppend = new ArrayList<>();
-      jvmArgsAppend.add(JVM_ARG_PREFIX + temp.getAbsolutePath());
+      jvmArgsAppend.add(JVM_ARG_PREFIX_BENCHCONF + benchConfFile.getAbsolutePath());
+      jvmArgsAppend.add(JVM_ARG_PREFIX_WARPCONF + warpConfFile.getAbsolutePath());
 
       // Build base options
       ChainedOptionsBuilder optionsBuilder = new OptionsBuilder()
@@ -101,18 +143,7 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
           .shouldFailOnError(true);
 
       // Override parameters with those given
-      overrideParameters(optionsBuilder, jvmArgsAppend, parameters);
-
-      // Copy warpscript extensions properties and warpfleet config
-      Properties props = WarpConfig.getProperties();
-      for (String key: props.stringPropertyNames()) {
-        if (key.equals(Configuration.CONFIG_WARPSCRIPT_EXTENSIONS)
-            || key.startsWith(Configuration.CONFIG_WARPSCRIPT_EXTENSION_PREFIX)
-            || key.equals(Configuration.WARPFLEET_MACROS_REPOS)
-            || key.equals(Configuration.WARPFLEET_MACROS_VALIDATOR)) {
-          jvmArgsAppend.add("-D" + key + "=" + props.getProperty(key));
-        }
-      }
+      overrideParameters(optionsBuilder, jvmArgsAppend, jmhConf);
 
       optionsBuilder.jvmArgsAppend(jvmArgsAppend.toArray(new String[jvmArgsAppend.size()]));
 
@@ -125,28 +156,43 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
       try (PrintStream ps = new PrintStream(baos, true, utf8)) {
         ResultFormatFactory.getInstance(ResultFormatType.JSON, ps).writeOut(runResults);
         String json = baos.toString(utf8);
-        stack.push(JsonUtils.jsonToObject(json));
+        List runResultsList = (List) JsonUtils.jsonToObject(json);
+        for (Object runResult: runResultsList) {
+          ((Map) runResult).put("benchConfiguration", benchConfiguration);
+        }
+        stack.push(runResultsList);
       } catch (UnsupportedEncodingException e) {
         // cannot happen
       } catch (JsonProcessingException e) {
         throw new WarpScriptException(getName() + " failed because the JMH JSON is invalid.", e);
       }
     } catch (RunnerException e) {
+      // The true exception is hidden in the suppressed exception of the cause, try to get it.
+      Throwable eCause = e.getCause();
+      if (null != eCause) {
+        Throwable[] eCauseSupp = eCause.getSuppressed();
+        if (eCauseSupp.length > 0) {
+          throw new WarpScriptException(getName() + " failed.", eCauseSupp[0]);
+        }
+      }
       throw new WarpScriptException(getName() + " failed.", e);
     } catch (IOException e) {
       throw new WarpScriptException(getName() + " could not create temporary file.", e);
     } finally {
-      if (null != temp) {
-        temp.delete();
+      if (null != benchConfFile) {
+        benchConfFile.delete();
+      }
+      if (null != warpConfFile) {
+        warpConfFile.delete();
       }
     }
 
     return stack;
   }
 
-  private void overrideParameters(ChainedOptionsBuilder optionsBuilder, List<String> jvmArgs, Map<Object, Object> parameters) throws WarpScriptException {
+  private void overrideParameters(ChainedOptionsBuilder optionsBuilder, List<String> jvmArgs, Map<Object, Object> jmhConfiguration) throws WarpScriptException {
 
-    for (Map.Entry<Object, Object> entry: parameters.entrySet()) {
+    for (Map.Entry<Object, Object> entry: jmhConfiguration.entrySet()) {
       if (!(entry.getKey() instanceof String)) {
         throw new WarpScriptException(getName() + " expects parameter keys to be String.");
       }
@@ -183,8 +229,8 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
           }
           break;
         case "measurementTime":
-          if (!(entry.getValue() instanceof Long)) {
-            throw new WarpScriptException(getName() + " expects measurementTime to be a Long.");
+          if (!(entry.getValue() instanceof String)) {
+            throw new WarpScriptException(getName() + " expects measurementTime to be a String.");
           }
           try {
             optionsBuilder.measurementTime(TimeValue.valueOf((String) entry.getValue()));
@@ -244,15 +290,16 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
           }
           break;
         case "threads":
-          if (!(entry.getValue() instanceof Long)) {
-            throw new WarpScriptException(getName() + " expects threads to be a Long.");
-          }
-          try {
-            optionsBuilder.threads(Math.toIntExact((Long) entry.getValue()));
-          } catch (ArithmeticException | IllegalArgumentException e) {
-            throw new WarpScriptException(getName() + " expects valid parameter option.", e);
-          }
-          break;
+          throw new WarpScriptException(getName() + " does not support multi-threaded benchmarks as stacks are mono-threaded.");
+//          if (!(entry.getValue() instanceof Long)) {
+//            throw new WarpScriptException(getName() + " expects threads to be a Long.");
+//          }
+//          try {
+//            optionsBuilder.threads(Math.toIntExact((Long) entry.getValue()));
+//          } catch (ArithmeticException | IllegalArgumentException e) {
+//            throw new WarpScriptException(getName() + " expects valid parameter option.", e);
+//          }
+//          break;
         case "timeUnit":
           if (!(entry.getValue() instanceof String)) {
             throw new WarpScriptException(getName() + " expects timeUnit to be a String.");
@@ -304,8 +351,8 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
           }
           break;
         case "warmupTime":
-          if (!(entry.getValue() instanceof Long)) {
-            throw new WarpScriptException(getName() + " expects warmupTime to be a Long.");
+          if (!(entry.getValue() instanceof String)) {
+            throw new WarpScriptException(getName() + " expects warmupTime to be a String.");
           }
           try {
             optionsBuilder.warmupTime(TimeValue.valueOf((String) entry.getValue()));
