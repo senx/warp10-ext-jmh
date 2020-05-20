@@ -1,0 +1,15 @@
+{
+  "type": "ext",
+  "group": "io.warp10.script.ext.jmh",
+  "artifact": "jmh",
+  "version": "0.0.1",
+  "description": "JMH for WarpScript",
+  "author": "Fabien Tencé",
+  "email": "fabien.tence@senx.io",
+  "license": "GNU General Public License v2.0",
+  "git": "",
+  "repoUrl": "",
+  "tags": [
+    "benchmark"
+  ]
+}
