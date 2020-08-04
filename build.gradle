@@ -54,20 +54,20 @@ def getVersionName(String revision) {
 // bintrayApiKey = The bintray API key
 //
 
-project.ext.bintrayRepo = '@BINTRAYREPO#'
-project.ext.bintrayVcsUrl = '@VCSURL@'
-project.ext.bintrayLicenses = [ '@LICENSE@' ]
+project.ext.bintrayRepo = 'maven'
+project.ext.bintrayVcsUrl = 'https://github.com/senx/warp10-ext-jmh'
+project.ext.bintrayLicenses = [ 'GPL-2.0' ]
 
 //
 // GnuPG configuration for signing module
 // @see https://docs.gradle.org/current/userguide/signing_plugin.html
 //
 
-//project.ext.'signing.gnupg.keyName' = 'hhhhhhhh'
+project.ext.'signing.gnupg.keyName' = project.property('ftence.gnupg.keyName')
 
 
-project.ext.group = 'io.warp10.script.ext.jmh'
-project.ext.name = 'jmh'
+project.ext.group = 'io.warp10'
+project.ext.name = 'warp10-ext-jmh'
 project.ext.uberjar = null != System.getProperty('uberjar')
 project.ext.version = getVersionName('0.0.1') + (project.ext.uberjar ? '-uberjar' : '')
 
@@ -155,7 +155,7 @@ jar {
   }
   from('.') {
     include 'README.md'
-    include 'io.warp10.script.ext.jmh-jmh.conf'
+    include 'io.warp10-warp10-ext-jmh.conf'
   }
   from files(sourceSets.generated.output.classesDirs)
   from files(sourceSets.generated.resources.srcDirs)
@@ -180,7 +180,7 @@ shadowJar {
   }
   from('.') {
     include 'README.md'
-    include 'io.warp10.script.ext.jmh-jmh.conf'
+    include 'io.warp10-warp10-ext-jmh.conf'
   }
   from files(sourceSets.generated.output.classesDirs)
   from files(sourceSets.generated.resources.srcDirs)
