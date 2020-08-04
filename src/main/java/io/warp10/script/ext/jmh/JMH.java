@@ -25,6 +25,7 @@ import io.warp10.script.WarpScriptException;
 import io.warp10.script.WarpScriptLib;
 import io.warp10.script.WarpScriptStack;
 import io.warp10.script.WarpScriptStackFunction;
+import io.warp10.script.functions.CLEAR;
 import io.warp10.script.functions.SNAPSHOT;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.results.RunResult;
@@ -55,6 +56,8 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunction {
+
+  private static final CLEAR CLEAR = new CLEAR(WarpScriptLib.CLEAR);
 
   public static final String JVM_ARG_PREFIX_BENCHCONF = "-Djmh.benchconfiguration.file=";
   public static final String JVM_ARG_PREFIX_WARPCONF = "-Djmh.warp10configuration.file=";
@@ -103,7 +106,7 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
     // Default to clear the stack after each invocation of the macro
     if (!benchConfiguration.containsKey(POSTINVOCATION_MACRO)) {
       WarpScriptStack.Macro clearMacro = new WarpScriptStack.Macro();
-      clearMacro.add(WarpScriptLib.getFunction(WarpScriptLib.CLEAR));
+      clearMacro.add(CLEAR);
       benchConfiguration.put(POSTINVOCATION_MACRO, clearMacro);
     }
 
