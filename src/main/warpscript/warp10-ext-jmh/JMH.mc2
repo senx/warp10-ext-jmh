@@ -1,0 +1,91 @@
+{
+  'name' 'JMH'
+  'desc'
+    <'
+Run a JMH benchmark and outputs a complete report.
+
+The benchark can be heavily customized. The `conf` parameter accepts all the optional keys:
+* mem: The memory allocated to the JVM, expressed as `somenumber[g|G|m|M|k|K]`
+* warmupIterations: Number of iteration for the warmup.
+* warmupTime: Duration of each iteration of the warmup.
+* measurementIterations: Number of iteration for the measurement.
+* measurementTime: Duration of each iteration for the measurement.
+* forks: Number of JVMs used for the measurement. 0 is discouraged and make the benchmark run in the same JVM as the current instance.
+* mode: thrpt, avgt, sample, ss or all see http://tutorials.jenkov.com/java-performance/jmh.html#jmh-benchmark-modes.
+* timeUnit: time unit used for the report, see http://tutorials.jenkov.com/java-performance/jmh.html#benchmark-time-units.
+* profilers: Custom profilers can be installed on your machine, by default cl, comp, gc, hs_cl, hs_comp, hs_gc, hs_rt, hs_thr, pauses, safepoints and stack should be available.
+
+The macros which can be defined in the `macros` parameter must include `macro`, which will be benchmarked. The others are optional and will be run:
+* pretrial: at the start of each fork.
+* preiteration: at the start of each iteration.
+* preinvocation: before each call of your macro.
+* postinvocation: after each call of your macro, if not set, defaults to <% CLEAR %>.
+* postiteration: at the end of each iteration.
+* posttrial: at the end of each fork.
+    '>
+  'sig' [
+    [ [ 'conf:MAP' 'macro:MACRO' ]  [ 'report:MAP' ] ]
+    [ [ 'conf:MAP' 'macros:MAP' ]  [ 'report:MAP' ] ]
+    ]
+  'params' {
+    'conf' 'Configuration for the benchmark.'
+    'macro' 'The macro to be benchmarked.'
+    'macros' 'The definition of the macro to be benchmarked and macros run before and after this macro.'
+    'report' 'A report of the benchmark.'
+  }
+  'examples' [
+<'
+<% RANDOM %>
+{
+  'forks' 1
+  'mem' '64m'
+  'warmupIterations' 1
+  'measurementIterations' 1
+  'warmupTime' '1 s'
+  'measurementTime' '1 s'
+  'timeUnit' 'MICROSECONDS'
+}
+JMH
+'>
+  ]
+  'conf' [ ]
+}
+'info' STORE
+
+<%
+  !$info INFO
+  
+  'JMH' EVAL
+%>
+'macro' STORE
+
+//
+// Unit tests
+//
+
+'io.warp10.script.ext.jmh.JMHWarpScriptExtension' EXTLOADED
+<%
+  <% RANDOM %>
+  {
+    'forks' 0
+    // 'mem' '64m'
+    // 'warmupIterations' 1
+    // 'measurementIterations' 1
+    // 'warmupTime' '1 s'
+    // 'measurementTime' '1 s'
+    'timeUnit' 'MICROSECONDS'
+    'mode' 'ss'
+  }
+  'JMH' EVAL
+
+  0 GET
+  'report' STORE
+
+  $report 'forks' GET 0 == ASSERT
+  $report 'mode' GET 'ss' == ASSERT
+  $report 'primaryMetric' GET 'score' GET TYPEOF "DOUBLE" == ASSERT
+  $report 'primaryMetric' GET 'scoreUnit' GET "us/op" == ASSERT
+%>
+IFT
+
+$macro
