@@ -8,7 +8,7 @@
   "email": "contact@senx.io",
   "license": "GNU General Public License v2.0",
   "git": "https://github.com/senx/warp10-ext-jmh",
-  "repoUrl": "https://dl.bintray.com/senx/maven",
+  "repoUrl": "https://repo.maven.apache.org/maven2",
   "tags": [
     "benchmark"
   ]
