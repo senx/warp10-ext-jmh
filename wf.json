@@ -2,7 +2,7 @@
   "type": "ext",
   "group": "io.warp10",
   "artifact": "warp10-ext-jmh",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "JMH for WarpScript™",
   "author": "SenX",
   "email": "contact@senx.io",

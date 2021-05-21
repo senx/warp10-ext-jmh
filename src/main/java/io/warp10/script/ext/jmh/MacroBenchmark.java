@@ -22,6 +22,8 @@ import io.warp10.script.MemoryWarpScriptStack;
 import io.warp10.script.WarpScriptException;
 import io.warp10.script.WarpScriptLib;
 import io.warp10.script.WarpScriptStack;
+import io.warp10.script.WarpScriptStack.Macro;
+import io.warp10.script.WarpScriptStackFunction;
 import io.warp10.warp.sdk.AbstractWarp10Plugin;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
@@ -44,13 +46,13 @@ public class MacroBenchmark {
   public static class MBState {
 
     MemoryWarpScriptStack stack;
-    WarpScriptStack.Macro macro;
-    WarpScriptStack.Macro preTrial;
-    WarpScriptStack.Macro preIteration;
-    WarpScriptStack.Macro preInvocation;
-    WarpScriptStack.Macro postInvocation;
-    WarpScriptStack.Macro postIteration;
-    WarpScriptStack.Macro postTrial;
+    Macro macro;
+    Macro preTrial;
+    Macro preIteration;
+    Macro preInvocation;
+    Macro postInvocation;
+    Macro postIteration;
+    Macro postTrial;
 
     @Setup(Level.Trial)
     public void doTrialSetup(BenchmarkParams params) throws WarpScriptException, IOException {
@@ -82,49 +84,63 @@ public class MacroBenchmark {
           stack.exec(benchConfSnapshot);
           Map benchConf = (Map) stack.pop();
 
-          macro = (WarpScriptStack.Macro) benchConf.get(JMH.MACRO_KEY);
-          preTrial = (WarpScriptStack.Macro) benchConf.getOrDefault(JMH.PRETRIAL_MACRO, new WarpScriptStack.Macro());
-          preIteration = (WarpScriptStack.Macro) benchConf.getOrDefault(JMH.PREITERATION_MACRO, new WarpScriptStack.Macro());
-          preInvocation = (WarpScriptStack.Macro) benchConf.getOrDefault(JMH.PREINVOCATION_MACRO, new WarpScriptStack.Macro());
-          postInvocation = (WarpScriptStack.Macro) benchConf.getOrDefault(JMH.POSTINVOCATION_MACRO, new WarpScriptStack.Macro());
-          postIteration = (WarpScriptStack.Macro) benchConf.getOrDefault(JMH.POSTITERATION_MACRO, new WarpScriptStack.Macro());
-          postTrial = (WarpScriptStack.Macro) benchConf.getOrDefault(JMH.POSTTRIAL_MACRO, new WarpScriptStack.Macro());
+          macro = (Macro) benchConf.get(JMH.MACRO_KEY);
+          preTrial = (Macro) benchConf.getOrDefault(JMH.PRETRIAL_MACRO, new Macro());
+          preIteration = (Macro) benchConf.getOrDefault(JMH.PREITERATION_MACRO, new Macro());
+          preInvocation = (Macro) benchConf.getOrDefault(JMH.PREINVOCATION_MACRO, new Macro());
+          postInvocation = (Macro) benchConf.getOrDefault(JMH.POSTINVOCATION_MACRO, new Macro());
+          postIteration = (Macro) benchConf.getOrDefault(JMH.POSTITERATION_MACRO, new Macro());
+          postTrial = (Macro) benchConf.getOrDefault(JMH.POSTTRIAL_MACRO, new Macro());
           break;
         }
       }
 
-      stack.exec(preTrial);
+      fastExec(stack, preTrial);
     }
 
     @Setup(Level.Iteration)
     public void doIterationSetup() throws WarpScriptException {
-      stack.exec(preIteration);
+      fastExec(stack, preIteration);
     }
 
     @Setup(Level.Invocation)
     public void doInvocationSetup() throws WarpScriptException {
-      stack.exec(preInvocation);
+      fastExec(stack, preInvocation);
     }
 
     @TearDown(Level.Invocation)
     public void doInvocationTearDown() throws WarpScriptException {
-      stack.exec(postInvocation);
+      fastExec(stack, postInvocation);
     }
 
     @TearDown(Level.Iteration)
     public void doIterationTearDown() throws WarpScriptException {
-      stack.exec(postIteration);
+      fastExec(stack, postIteration);
     }
 
     @TearDown(Level.Trial)
     public void doTrialTearDown() throws WarpScriptException {
-      stack.exec(postTrial);
+      fastExec(stack, postTrial);
     }
   }
 
   @Benchmark
   public void benchmarkMacro(MBState mbState) throws WarpScriptException {
-    mbState.stack.exec(mbState.macro);
+    fastExec(mbState.stack, mbState.macro);
+  }
+
+  public static void fastExec(WarpScriptStack stack, Macro macro) throws WarpScriptException {
+    int n = macro.size();
+    for (int i = 0; i < n; i++) {
+      Object stmt = macro.get(i);
+
+      if (stmt instanceof WarpScriptStackFunction) {
+        WarpScriptStackFunction esf = (WarpScriptStackFunction) stmt;
+        esf.apply(stack);
+      } else {
+        stack.push(stmt);
+      }
+    }
   }
 
 }
