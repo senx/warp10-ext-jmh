@@ -111,6 +111,9 @@ jar {
         include 'README.md'
         include project.group + '-' + project.name + '.conf'
     }
+
+    from files(sourceSets.generated.output.classesDirs)
+    from files(sourceSets.generated.resources.srcDirs)
 }
 
 shadowJar {
@@ -136,6 +139,9 @@ shadowJar {
         include 'README.md'
         include project.group + '-' + project.name + '.conf'
     }
+
+    from files(sourceSets.generated.output.classesDirs)
+    from files(sourceSets.generated.resources.srcDirs)
 }
 
 //
