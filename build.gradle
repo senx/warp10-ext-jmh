@@ -256,3 +256,17 @@ def getVersion() {
         return nogit
     }
 }
+
+task generateJMH(type: JavaExec) {
+    def generationOutputDir = project.file("$projectDir/src/generated/jmh")
+    outputs.dir(generationOutputDir)
+
+    group = "Generation"
+    description = "Generate JMH classes and resources"
+    classpath = sourceSets.main.runtimeClasspath + sourceSets.main.compileClasspath
+    main = 'io.warp10.script.ext.jmh.JMHGenerator'
+    args = [ "$generationOutputDir/java", "$generationOutputDir/resources"]
+}
+
+compileGeneratedJava.dependsOn(generateJMH)
+processGeneratedResources.dependsOn(generateJMH)
