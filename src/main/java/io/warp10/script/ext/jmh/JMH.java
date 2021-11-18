@@ -132,7 +132,7 @@ public class JMH extends NamedWarpScriptFunction implements WarpScriptStackFunct
         }
       }
 
-      ArrayList<String> jvmArgsAppend = new ArrayList<>();
+      ArrayList<String> jvmArgsAppend = new ArrayList<String>();
       jvmArgsAppend.add(JVM_ARG_PREFIX_BENCHCONF + benchConfFile.getAbsolutePath());
       jvmArgsAppend.add(JVM_ARG_PREFIX_WARPCONF + warpConfFile.getAbsolutePath());
 
